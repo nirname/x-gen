@@ -1,0 +1,17 @@
+locations:
+- location: /
+  proxy: web
+- location: /admin
+  proxy: admin
+  auth:
+    request: /auth/admin_authorized
+    headers:
+    - User-Id
+    - User-Type
+- location: /auth
+  proxy: auth
+  auth:
+    service: true
+  custom: |-
+    sendfile off;
+    proxy_cache_valid 0;

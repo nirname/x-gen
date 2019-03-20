@@ -1,0 +1,61 @@
+worker_processes 1;
+daemon off;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  access_log /dev/stdout;
+  error_log  /dev/stderr info;
+
+  gzip_proxied any;
+
+{{ .RawData | indent 2 -}}
+
+  {{ range $name, $servers := .Services }}
+  upstream {{ $name }} {
+    {{- range $servers }}
+    server {{ . }};
+    {{- end }}
+  }
+  {{ end }}
+
+  server {
+    listen 80 default_server;
+    server_name _;
+    proxy_set_header Host $host;
+    sendfile off;
+    proxy_cache_valid 0;
+
+    {{ range .Locations }}
+    location {{ .Location }} {
+      {{- if .Proxy }}
+      proxy_pass $scheme://{{ .Proxy }};
+      {{- end }}
+
+      {{- with .Auth }}
+      {{- if .Service }}
+      internal;
+      proxy_pass_request_body off;
+      proxy_set_header Content-Length "";
+      proxy_set_header Host $host;
+      proxy_set_header X-Original-URI $request_uri;
+      {{- end }}
+      {{- if .Request }}
+      auth_request {{ .Request }};
+      error_page 401 =302 $scheme://$host/;
+      {{- end }}
+      {{- range .Headers }}
+      auth_request_set ${{ . | underscore }} $upstream_http_{{ . | underscore }};
+      proxy_set_header {{ . | header }} ${{ . | underscore }};
+      {{- end }}
+      {{- end }}
+
+      {{- if .Custom }}
+{{ .Custom | indent 6 }}
+      {{- end}}
+    }
+    {{ end }}
+  }
+}
